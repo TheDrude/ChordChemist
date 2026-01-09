@@ -19,8 +19,10 @@
       "description": "Circular Chord Generative Sequencer",
       "tags": [
         "Sequencer",
-        "Chord",
-	"Generative"
+        "Visual",
+	"Polyphonic",
+	"Poly",
+	"Utility"
       ]
     }
   ]
