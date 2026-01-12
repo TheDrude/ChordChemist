@@ -18,12 +18,13 @@
       "name": "ChordChemist",
       "description": "Circular Chord Generative Sequencer",
       "tags": [
-        "Sequencer",
-        "Visual",
-	"Polyphonic",
-	"Poly",
-	"Utility"
+    	"Sequencer",
+    	"Visual",
+		"Polyphonic",
+		"Poly",
+		"Utility"
       ]
     }
   ]
+
 }
