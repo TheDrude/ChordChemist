@@ -7,10 +7,10 @@
   "author": "Drude",
   "authorEmail": "drude@drude.net",
   "authorUrl": "http://www.drude.net",
-  "pluginUrl": "",
-  "manualUrl": "",
-  "sourceUrl": "",
-  "donateUrl": "",
+  "pluginUrl": "https://github.com/TheDrude/ChordChemist",
+  "manualUrl": "https://github.com/TheDrude/ChordChemist/blob/main/ChordChemistManual.md",
+  "sourceUrl": "https://github.com/TheDrude/ChordChemist/tree/main/src",
+  "donateUrl": "https://paypal.me/dliwer",
   "changelogUrl": "",
   "modules": [
     {
@@ -20,9 +20,10 @@
       "tags": [
     	"Sequencer",
     	"Visual",
-		"Polyphonic",
-		"Poly",
-		"Utility"
+		  "Polyphonic",
+		  "Poly",
+		  "Utility",
+      "Quantizer"
       ]
     }
   ]

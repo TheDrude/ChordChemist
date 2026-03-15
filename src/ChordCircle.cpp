@@ -2,6 +2,7 @@
  * ChordCircle.cpp
  * * UPDATE: Moved CV inputs (Steps, Spread, Random) another 15px (4mm) to the left.
  * * Current Layout: Knobs at 15.5mm, CV Inputs at 26.5mm.
+ * * Added json info
  */
 
 #include "plugin.hpp"
