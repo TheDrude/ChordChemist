@@ -9,6 +9,8 @@
 #include <sstream>
 #include <vector>
 #include <string>
+#include <algorithm>
+#include <cmath>
 
 using namespace rack;
 
@@ -167,12 +169,12 @@ struct ChordCircle : Module {
         configParam(STEPS_COUNT_PARAM, 1.f, 16.f, 8.f, "Seq Length");
         configParam(ROOT_NOTE_PARAM, 0.f, 60.f, 24.f, "Root Note"); 
         configParam(SCALE_TYPE_PARAM, 0.f, (float)(theory.SCALES.size() - 1), 0.f, "Scale Type"); 
-        configParam(SPREAD_PARAM, 0.f, 1.f, 0.f, "Voice Spread");
+        configParam(SPREAD_PARAM, 0.f, 12.f, 0.f, "Voice Spread");
         configParam(RANDOMIZE_BTN_PARAM, 0.f, 1.f, 0.f, "Randomize Seq");
         
         for (int i = 0; i < 16; i++) {
             configParam(STEP_DEGREE_PARAM_0 + i, 0.f, 6.f, (float)(i % 7), "Step Degree");
-            stepQualities[i] = 0; 
+            stepQualities[i] = 1; // Default to Triad (quality 1)
         }
     }
 
@@ -190,7 +192,7 @@ struct ChordCircle : Module {
         bool trigger = false;
         if (clockTrigger.process(inputs[CLOCK_INPUT].getVoltage())) trigger = true;
         if (resetTrigger.process(inputs[RESET_INPUT].getVoltage())) {
-            currentStep = 0; trigger = true; 
+            currentStep = -1; trigger = true; 
         }
 
         float rndBtn = params[RANDOMIZE_BTN_PARAM].getValue();
@@ -214,16 +216,16 @@ struct ChordCircle : Module {
             params[STEPS_COUNT_PARAM].setValue(clamp(stepsCv, 1.f, 16.f));
         }
 
-        // 2. Spread (0V = 0%, 10V = 100%)
+        // 2. Spread (0V to 10V maps to 0 to 12 semitones)
         if (inputs[SPREAD_CV_INPUT].isConnected()) {
             float spreadCv = inputs[SPREAD_CV_INPUT].getVoltage();
-            params[SPREAD_PARAM].setValue(clamp(spreadCv / 10.f, 0.f, 1.f));
+            params[SPREAD_PARAM].setValue(clamp((spreadCv / 10.f) * 12.f, 0.f, 12.f));
         }
 
-        // 3. Root (1V/Octave standard: 0V=0, 5V=60)
+        // 3. Root (1V/Octave standard: 0V=C4, which is param value 36)
         if (inputs[ROOT_CV_INPUT].isConnected()) {
             float rootCv = inputs[ROOT_CV_INPUT].getVoltage();
-            params[ROOT_NOTE_PARAM].setValue(clamp(rootCv * 12.f, 0.f, 60.f));
+            params[ROOT_NOTE_PARAM].setValue(clamp((rootCv * 12.f) + 36.f, 0.f, 60.f));
         }
 
         // 4. Scale (Map 0-10V to Full Scale List)
@@ -278,23 +280,63 @@ struct ChordCircle : Module {
                 int octaveShift = scaleIndexRaw / s.size();
                 int notePitchClass = s[scaleIndex];
                 
-                float v = (rootInt / 12.0f) + (notePitchClass / 12.0f) + (float)octaveShift;
+                float v = ((rootInt - 36) / 12.0f) + (notePitchClass / 12.0f) + (float)octaveShift;
                 currentVoices.push_back(v);
             }
         }
 
         outputs[POLY_OUTPUT].setChannels(4);
         
-        float spread = params[SPREAD_PARAM].getValue();
-        // Spread is already set by CV above
-        spread = clamp(spread, 0.f, 1.f);
+        if (currentVoices.size() == 4) {
+            float spreadSemitones = std::round(params[SPREAD_PARAM].getValue());
+            spreadSemitones = clamp(spreadSemitones, 0.f, 12.f);
+            int spreadSemis = (int)spreadSemitones;
 
-        for (int i = 0; i < 4; i++) {
-            float v = currentVoices[i];
-            if (i == 0 && spread > 0.5f) v -= 1.0f; 
-            outputs[POLY_OUTPUT].setVoltage(v, i);
-            outputs[VOICE_1_OUTPUT + i].setVoltage(v);
-            lights[VOICE_LIGHT_1 + i].setBrightness(1.0f);
+            int rootPitch = std::round(currentVoices[0] * 12.0f);
+            std::vector<int> upperClasses;
+            for (int k = 1; k < 4; k++) {
+                int pitch = std::round(currentVoices[k] * 12.0f);
+                int pc = (pitch % 12 + 12) % 12;
+                upperClasses.push_back(pc);
+            }
+            std::sort(upperClasses.begin(), upperClasses.end());
+            
+            int minSpread = 999999;
+            std::vector<int> bestPitches;
+            
+            do {
+                std::vector<int> currentPitches;
+                currentPitches.push_back(rootPitch);
+                int currentNote = rootPitch;
+                
+                for (int i = 0; i < 3; i++) {
+                    int targetPc = upperClasses[i];
+                    int minRequired = currentNote + spreadSemis;
+                    int pc = (minRequired % 12 + 12) % 12;
+                    int diff = (targetPc - pc + 12) % 12;
+                    int pitch = minRequired + diff;
+                    
+                    if (pitch <= currentNote) {
+                        pitch += 12;
+                    }
+                    
+                    currentPitches.push_back(pitch);
+                    currentNote = pitch;
+                }
+                
+                int span = currentPitches.back() - currentPitches.front();
+                if (span < minSpread) {
+                    minSpread = span;
+                    bestPitches = currentPitches;
+                }
+            } while (std::next_permutation(upperClasses.begin(), upperClasses.end()));
+
+            for (int i = 0; i < 4; i++) {
+                float v = bestPitches[i] / 12.0f;
+                outputs[POLY_OUTPUT].setVoltage(v, i);
+                outputs[VOICE_1_OUTPUT + i].setVoltage(v);
+                lights[VOICE_LIGHT_1 + i].setBrightness(1.0f);
+            }
         }
     }
 };
@@ -413,6 +455,46 @@ struct CircleDisplay : TransparentWidget {
 };
 
 struct ChordCircleWidget : ModuleWidget {
+    void appendContextMenu(Menu* menu) override {
+        ModuleWidget::appendContextMenu(menu);
+
+        ChordCircle* m = dynamic_cast<ChordCircle*>(module);
+        if (m) {
+            menu->addChild(new MenuSeparator);
+            
+            struct ScaleMenu : MenuItem {
+                ChordCircle* module;
+                Menu* createChildMenu() override {
+                    Menu* menu = new Menu;
+                    for (size_t i = 0; i < module->theory.SCALE_NAMES.size(); i++) {
+                        struct ScaleItem : MenuItem {
+                            ChordCircle* module;
+                            int scaleIndex;
+                            void onAction(const event::Action& e) override {
+                                module->params[ChordCircle::SCALE_TYPE_PARAM].setValue(scaleIndex);
+                            }
+                            void step() override {
+                                rightText = (module->params[ChordCircle::SCALE_TYPE_PARAM].getValue() == scaleIndex) ? "✔" : "";
+                                MenuItem::step();
+                            }
+                        };
+                        ScaleItem* item = new ScaleItem;
+                        item->text = module->theory.SCALE_NAMES[i];
+                        item->module = module;
+                        item->scaleIndex = i;
+                        menu->addChild(item);
+                    }
+                    return menu;
+                }
+            };
+            ScaleMenu* item = new ScaleMenu;
+            item->text = "Select Scale";
+            item->module = m;
+            item->rightText = RIGHT_ARROW;
+            menu->addChild(item);
+        }
+    }
+
     void addLabel(Vec centerPos, std::string text) {
         Label* label = new Label;
         label->box.pos = centerPos.minus(Vec(30, 0)); 

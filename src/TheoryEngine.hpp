@@ -89,7 +89,17 @@ struct TheoryEngine {
         else if (i3 == 3 && i5 == 7) quality = "m";
         else if (i3 == 3 && i5 == 6) quality = "dim";
         else if (i3 == 4 && i5 == 8) quality = "aug";
-        else quality = "?";
+        else if (i3 == 5 && i5 == 7) quality = "sus4";
+        else if (i3 == 2 && i5 == 7) quality = "sus2";
+        else if (i3 == 4 && i5 == 6) quality = "Mb5";
+        else if (i3 == 3 && i5 == 8) quality = "m#5";
+        else if (i3 == 5 && i5 == 8) quality = "sus4#5";
+        else if (i3 == 5 && i5 == 6) quality = "sus4b5";
+        else if (i3 == 2 && i5 == 6) quality = "sus2b5";
+        else if (i3 == 7 && i5 == 7) quality = "5"; 
+        else {
+            quality = "(" + std::to_string(i3) + "," + std::to_string(i5) + ")";
+        }
 
         return rootName + quality;
     }
