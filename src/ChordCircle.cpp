@@ -368,21 +368,22 @@ struct ValueDisplay : TransparentWidget {
     const std::vector<std::string> noteNames = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 
     void draw(const DrawArgs& args) override {
-        if (!module) return;
         std::string text = "?";
-        if (mode == 0) {
-            // Reads the param which is now updated by CV automatically
-            int val = (int)module->params[ChordCircle::ROOT_NOTE_PARAM].getValue();
-            while(val < 0) val += 120;
-            int oct = (val / 12) + 1; 
-            std::string note = noteNames[val % 12];
-            text = note + std::to_string(oct);
+        if (module) {
+            if (mode == 0) {
+                int val = (int)module->params[ChordCircle::ROOT_NOTE_PARAM].getValue();
+                while(val < 0) val += 120;
+                int oct = (val / 12) + 1; 
+                std::string note = noteNames[val % 12];
+                text = note + std::to_string(oct);
+            } else {
+                int val = (int)module->params[ChordCircle::SCALE_TYPE_PARAM].getValue();
+                int max = module->theory.SCALE_NAMES.size() - 1;
+                val = clamp(val, 0, max);
+                text = module->theory.SCALE_NAMES[val];
+            }
         } else {
-            // Reads the param which is now updated by CV automatically
-            int val = (int)module->params[ChordCircle::SCALE_TYPE_PARAM].getValue();
-            int max = module->theory.SCALE_NAMES.size() - 1;
-            val = clamp(val, 0, max);
-            text = module->theory.SCALE_NAMES[val];
+            text = (mode == 0) ? "C4" : "Major (Ionian)";
         }
         nvgFontSize(args.vg, 13);
         nvgFontFaceId(args.vg, APP->window->uiFont->handle);
@@ -395,31 +396,36 @@ struct ValueDisplay : TransparentWidget {
 struct CircleDisplay : TransparentWidget {
     ChordCircle* module = nullptr;
     void draw(const DrawArgs& args) override {
-        if (!module) return;
         float cx = box.size.x / 2.0;
         float cy = box.size.y / 2.6;
         float radius = 90.0; 
         
-        int stepsBase = (int)module->params[ChordCircle::STEPS_COUNT_PARAM].getValue();
-        int numSteps = clamp(stepsBase, 1, 16);
+        int numSteps = 8;
+        int rootPitchClass = 0;
+        int scale = 3;
+        int currentStep = -1;
+
+        if (module) {
+            int stepsBase = (int)module->params[ChordCircle::STEPS_COUNT_PARAM].getValue();
+            numSteps = clamp(stepsBase, 1, 16);
+            int rootVal = (int)module->params[ChordCircle::ROOT_NOTE_PARAM].getValue();
+            while(rootVal < 0) rootVal += 120; 
+            rootPitchClass = rootVal % 12;
+            int scaleParam = (int)module->params[ChordCircle::SCALE_TYPE_PARAM].getValue();
+            int maxScale = module->theory.SCALES.size() - 1;
+            scale = clamp(scaleParam, 0, maxScale);
+            currentStep = module->currentStep;
+        }
 
         float anglePerStep = (2 * M_PI) / numSteps;
         nvgStrokeWidth(args.vg, 1.5);
         
-        int rootVal = (int)module->params[ChordCircle::ROOT_NOTE_PARAM].getValue();
-        while(rootVal < 0) rootVal += 120; 
-        int rootPitchClass = rootVal % 12;
-
-        int scale = (int)module->params[ChordCircle::SCALE_TYPE_PARAM].getValue();
-        int maxScale = module->theory.SCALES.size() - 1;
-        scale = clamp(scale, 0, maxScale);
-
         for (int i = 0; i < numSteps; i++) {
             float start = i * anglePerStep - (M_PI / 2);
             float end = (i + 1) * anglePerStep - (M_PI / 2);
 
             nvgBeginPath(args.vg);
-            if (i == module->currentStep) nvgFillColor(args.vg, nvgRGBA(21, 55, 227, 255));
+            if (i == currentStep) nvgFillColor(args.vg, nvgRGBA(21, 55, 227, 255));
             else nvgFillColor(args.vg, nvgRGBA(60, 60, 60, 255));
             
             nvgArc(args.vg, cx, cy, radius, start, end, NVG_CW);
@@ -434,15 +440,19 @@ struct CircleDisplay : TransparentWidget {
                 float tx = cx + cos(textAngle) * (radius * 0.75);
                 float ty = cy + sin(textAngle) * (radius * 0.75);
                 
-                int deg = (int)module->params[ChordCircle::STEP_DEGREE_PARAM_0 + i].getValue();
-                std::string name;
-                if (scale >= 4 && scale <= 5) name = module->getPentatonicChordName(rootPitchClass, scale, deg); 
-                else name = module->theory.getChordName(rootPitchClass, scale, deg);
-                
-                int qual = module->stepQualities[i];
-                if (qual == 2) name += "6";
-                if (qual == 3) name += "9";
-                if (qual == 4) name += "11";
+                std::string name = "";
+                if (module) {
+                    int deg = (int)module->params[ChordCircle::STEP_DEGREE_PARAM_0 + i].getValue();
+                    if (scale >= 4 && scale <= 5) name = module->getPentatonicChordName(rootPitchClass, scale, deg); 
+                    else name = module->theory.getChordName(rootPitchClass, scale, deg);
+                    
+                    int qual = module->stepQualities[i];
+                    if (qual == 2) name += "6";
+                    if (qual == 3) name += "9";
+                    if (qual == 4) name += "11";
+                } else {
+                    name = "C"; 
+                }
                 
                 nvgFillColor(args.vg, nvgRGBA(255, 255, 255, 255));
                 nvgFontSize(args.vg, (numSteps > 10) ? 9 : 11);
@@ -495,7 +505,7 @@ struct ChordCircleWidget : ModuleWidget {
         }
     }
 
-    void addLabel(Vec centerPos, std::string text) {
+    void addLabel(Vec centerPos, const std::string& text) {
         Label* label = new Label;
         label->box.pos = centerPos.minus(Vec(30, 0)); 
         label->box.size = Vec(60, 10);
