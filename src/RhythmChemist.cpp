@@ -282,7 +282,7 @@ struct ValueDisplayRC : TransparentWidget {
                 text = std::to_string(val) + "%";
             }
         } else {
-            text = (mode == 0) ? "4/4" : ((mode == 1) ? "1/16" : "1");
+            text = (mode == 0) ? "4/4" : ((mode == 1) ? "1/16" : ((mode == 2) ? "1" : "50%"));
         }
         nvgFontSize(args.vg, 10);
         nvgFontFaceId(args.vg, APP->window->uiFont->handle);
@@ -318,16 +318,24 @@ struct PianoRollWidget : Widget {
     }
 
     void draw(const DrawArgs& args) override {
-        if (!module) return;
-
-        int numSteps = module->getNumSteps();
+        int numSteps = 16;
         int visibleCols = std::floor(box.size.x / squareSize);
 
-        int sigIdx = clamp((int)module->params[RhythmChemist::SIGNATURE_PARAM].getValue(), 0, 11);
-        int granIdx = clamp((int)module->params[RhythmChemist::GRANULARITY_PARAM].getValue(), 0, 4);
-        int beatsPerBar = module->signatureBeats[sigIdx];
-        int beatDenominator = module->signatureDenominators[sigIdx];
-        int granDenominator = module->granularityValues[granIdx];
+        int sigIdx = 3;
+        int granIdx = 2;
+        int beatsPerBar = 4;
+        int beatDenominator = 4;
+        int granDenominator = 16;
+
+        if (module) {
+            numSteps = module->getNumSteps();
+            sigIdx = clamp((int)module->params[RhythmChemist::SIGNATURE_PARAM].getValue(), 0, 11);
+            granIdx = clamp((int)module->params[RhythmChemist::GRANULARITY_PARAM].getValue(), 0, 4);
+            beatsPerBar = module->signatureBeats[sigIdx];
+            beatDenominator = module->signatureDenominators[sigIdx];
+            granDenominator = module->granularityValues[granIdx];
+        }
+
         int squaresPerBeat = std::max(1, granDenominator / beatDenominator);
         int squaresPerBar = squaresPerBeat * beatsPerBar;
 
@@ -381,7 +389,7 @@ struct PianoRollWidget : Widget {
                 nvgStroke(args.vg);
 
                 // Draw Note if active
-                uint8_t state = module->steps[step];
+                uint8_t state = module ? module->steps[step] : 0;
                 if (step >= 0 && step < 8192 && state > 0) {
                     nvgBeginPath(args.vg);
                     if (state == 1) { // GATE (Distinct)
@@ -395,7 +403,7 @@ struct PianoRollWidget : Widget {
                 }
 
                 // Draw playhead cursor
-                if (module->isRunning && module->currentStep == step) {
+                if (module && module->isRunning && module->currentStep == step) {
                     nvgBeginPath(args.vg);
                     nvgRect(args.vg, x, y, squareSize, squareSize);
                     nvgFillColor(args.vg, nvgRGBA(255, 100, 0, 150)); // Bright Orange
