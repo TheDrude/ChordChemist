@@ -6,5 +6,6 @@ using namespace rack;
 // Declare the Plugin, defined in plugin.cpp
 extern Plugin* pluginInstance;
 
-// Declare the Model, defined in ChordCircle.cpp
+// Declare the Models
 extern Model* modelChordCircle;
+extern Model* modelRhythmChemist;
